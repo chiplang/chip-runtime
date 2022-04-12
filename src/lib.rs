@@ -6,7 +6,7 @@ use wgpu::{
     TextureView,
 };
 
-pub mod basetag;
+pub mod layouter;
 
 /// TODO: This should include the previous tag tree
 #[allow(dead_code)]
@@ -108,7 +108,7 @@ impl ChipState {
         //     "test-module",
         //     "log",
         //     |mut caller: Caller<'_, Log>, param: u32| {
-        //         println!("log: {}", param);
+        //         println!("log: {param}");
         //         caller.data_mut().integers_logged.push(param);
         //     },
         // )?;
@@ -126,99 +126,5 @@ impl ChipState {
 
         println!("{:?}", result);
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn serialize() {
-        use crate::basetag::*;
-        let basetag = Tag {
-            style_type: StyleType::Flex,
-            style_base: StyleBase {
-                width: 10.0,
-                height: 10.0,
-                border_radius: 0.0,
-                stroke_width: 1.0,
-                fill_color: [255, 255, 255, 255],
-                outline_color: [0, 0, 0, 255],
-            },
-            children: vec![Tag {
-                style_type: StyleType::Table {
-                    size_method: TableSizeMethod::Auto,
-                    columns: 3,
-                    rows: 2,
-                },
-                style_base: StyleBase {
-                    width: 200.0,
-                    height: 20.0,
-                    border_radius: 15.0,
-                    stroke_width: 2.0,
-                    fill_color: [255, 0, 255, 127],
-                    outline_color: [20, 200, 50, 200],
-                },
-                children: vec![],
-            }],
-        };
-        let encoded = bincode::serialize(&basetag).unwrap();
-        // This is:
-        // 4 bytes for StyleType::Flex,
-        // 4 * 4 bytes for the four f32's in StyleBase
-        // 2 * 4 bytes for the colors in StyleBase
-        // 8 bytes for the len of the vec
-        // 48 bytes for the other tag; see `small_serialize`
-        assert_eq!(encoded.len(), 84);
-        let decoded: Tag = bincode::deserialize(&encoded[..]).unwrap();
-        assert_eq!(basetag, decoded);
-    }
-
-    #[test]
-    fn small_serialize() {
-        use crate::basetag::*;
-        let tag = Tag {
-            style_type: StyleType::Table {
-                size_method: TableSizeMethod::Auto,
-                columns: 3,
-                rows: 2,
-            },
-            style_base: StyleBase {
-                width: 200.0,
-                height: 20.0,
-                border_radius: 15.0,
-                stroke_width: 2.0,
-                fill_color: [255, 0, 255, 127],
-                outline_color: [20, 200, 50, 200],
-            },
-            children: vec![],
-        };
-        let encoded = bincode::serialize(&tag).unwrap();
-        // This is:
-        // 4 bytes for StyleType::Table
-        // 4 bytes for TableSizeMethod::Auto,
-        // 2 * 4 bytes for the column/row
-        // 6 * 4 bytes for StyleBase
-        // 8 bytes for the vec
-        assert_eq!(encoded.len(), 48);
-        let decoded: Tag = bincode::deserialize(&encoded[..]).unwrap();
-        assert_eq!(tag, decoded);
-    }
-
-    #[test]
-    fn serialize_parts() {
-        use crate::basetag::*;
-        let style_type = StyleType::Table {
-            size_method: TableSizeMethod::Auto,
-            columns: 3,
-            rows: 2,
-        };
-        let encoded = bincode::serialize(&style_type).unwrap();
-        // This is:
-        // 4 bytes for StyleTable::Table
-        // 4 bytes for size_method
-        // 2 * 4 bytes for the u32's
-        assert_eq!(encoded.len(), 16);
-        let decoded: StyleType = bincode::deserialize(&encoded[..]).unwrap();
-        assert_eq!(decoded, style_type);
     }
 }
