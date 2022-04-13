@@ -42,7 +42,7 @@ pub struct TagOptions {
 pub enum StyleType {
     Text(String),
     // TODO: Implement: Flex(FlexDirection),
-    Inline(FlowHorizontal, FlowVertical),
+    Inline(FlowDir, FlowHorizontal, FlowVertical),
     // TODO: Table {
     // size_method: TableSizeMethod,
     // columns: u32,
@@ -57,6 +57,42 @@ impl StyleType {
             Self::Text(t) => LayoutType::Text(t),
             _ => LayoutType::Box,
         }
+    }
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug)]
+pub enum FlowDir {
+    Vertical,
+    Horizontal,
+}
+
+impl Default for FlowDir {
+    fn default() -> FlowDir {
+        FlowDir::Vertical
+    }
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug)]
+pub enum FlowHorizontal {
+    LeftToRight,
+    RightToLeft,
+}
+
+impl Default for FlowHorizontal {
+    fn default() -> FlowHorizontal {
+        FlowHorizontal::LeftToRight
+    }
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug)]
+pub enum FlowVertical {
+    TopToBottom,
+    BottomToTop,
+}
+
+impl Default for FlowVertical {
+    fn default() -> FlowVertical {
+        FlowVertical::TopToBottom
     }
 }
 
@@ -83,20 +119,8 @@ pub struct Style {
     pub outline_color: Color,
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Debug)]
-pub enum FlowHorizontal {
-    LeftToRight,
-    RightToLeft,
-}
-
-#[derive(Deserialize, Serialize, PartialEq, Debug)]
-pub enum FlowVertical {
-    TopToBottom,
-    BottomToTop,
-}
-
-/// This does not contain a reference to the tag tree, because it needs to be serialized later for painting
-#[derive(Deserialize, Serialize, PartialEq, Debug)]
+/// This could maybe include a reference to the original tag, but I'm not sure about it
+#[derive(PartialEq, Debug)]
 pub struct LayoutBox {
     pub dimensions: Dimensions,
     pub layout_type: LayoutType,
@@ -105,18 +129,19 @@ pub struct LayoutBox {
 }
 
 impl LayoutBox {
+    /// Completes the layout box and all of it's children, calculating their positions
     fn layout_pos(self) -> LayoutResult<LayoutBox> {
         todo!()
     }
 }
 
 /// This will later store the border sizes too, with the [`EdgeSizes`] struct
-#[derive(Deserialize, Serialize, Clone, Copy, Debug, PartialEq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct Dimensions {
     pub content: Rect,
 }
 
-#[derive(Deserialize, Serialize, Clone, Copy, Debug, PartialEq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct Rect {
     pub x: f32,
     pub y: f32,
@@ -156,7 +181,7 @@ pub struct EdgeSizes {
     pub bottom: f32,
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum LayoutType {
     Box,
     Text(String),
@@ -299,7 +324,7 @@ impl Tag {
                     children: new_children,
                 })
             }
-            StyleType::Inline(_, _) => {
+            StyleType::Inline(flow_dir, _, _) => {
                 let max_width = self.width.unwrap_or_else(|| parent_info.max_width());
                 let max_height = self.height.unwrap_or_else(|| parent_info.max_height());
                 let mut this_info = ParentInfo {
@@ -310,29 +335,38 @@ impl Tag {
                     height: max_height,
                     next_parent: Some(&parent_info),
                 };
-                // The width still remaining in the current line
-                let mut remaining_line_width = max_width;
-
-                // This should be used later for when we implement vertical-first flow
-                // let mut remaining_col_height = max_height;
-
                 let mut new_children: Vec<LayoutBox> = Vec::with_capacity(self.children.len());
+                if flow_dir == FlowDir::Vertical {
+                    // The width still remaining in the current line
+                    let mut remaining_line_width = max_width;
 
-                // It should be noted there that we don't actually care if this goes beyond the max_height
-                // And, this could be used to easily get the position of the children, but that's done
-                // at a later step (probably). We could make it so some parts complete here and others
-                // complete at the layout step later?
-                for child in self.children {
-                    let child = child.calculate_dimensions(&this_info)?;
-                    if child.dimensions.content.width > remaining_line_width {
-                        // Put child in next line
-                        remaining_line_width = max_width;
-                    } else {
-                        // Child fits in current line
-                        remaining_line_width -= child.dimensions.content.width;
+                    // It should be noted there that we don't actually care if this goes beyond the max_height
+                    // And, this could be used to easily get the position of the children, but that's done
+                    // at a later step. We could make it so some parts complete here and others
+                    // complete at the layout step later? But for now, it's done later
+                    for child in self.children {
+                        let child = child.calculate_dimensions(&this_info)?;
+                        if child.dimensions.content.width > remaining_line_width {
+                            // Put child in next line
+                            remaining_line_width = max_width;
+                        } else {
+                            // Child fits in current line
+                            remaining_line_width -= child.dimensions.content.width;
+                        }
+                        new_children.push(child);
                     }
-                    new_children.push(child);
+                } else {
+                    let mut remaining_col_height = max_height;
+                    for child in self.children {
+                        let child = child.calculate_dimensions(&this_info)?;
+                        if child.dimensions.content.height > remaining_col_height {
+                            remaining_col_height = max_height;
+                        } else {
+                            remaining_col_height -= child.dimensions.content.height;
+                        }
+                    }
                 }
+
                 Ok(LayoutBox {
                     dimensions: Dimensions {
                         content: Rect {
@@ -348,7 +382,6 @@ impl Tag {
                 })
             }
         }
-        // Err(LayoutErr::NotYetImplemented)
     }
 }
 
