@@ -1,2 +1,2 @@
-# chip-runtime
-A runtime for the chip language.
+# chirp-runtime
+A runtime for the chirp language.
